@@ -16,6 +16,7 @@ import {
 
 export class ApiClient {
   private static userRole: string = 'ADMIN';
+  private static baseUrl: string = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
   public static setRole(role: string) {
     this.userRole = role;
@@ -25,6 +26,19 @@ export class ApiClient {
     return this.userRole;
   }
 
+  public static setBaseUrl(url: string) {
+    this.baseUrl = url.replace(/\/$/, '');
+  }
+
+  public static getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
+  private static getUrl(path: string): string {
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    return `${this.baseUrl}${cleanPath}`;
+  }
+
   private static getHeaders() {
     return {
       'Content-Type': 'application/json',
@@ -32,18 +46,23 @@ export class ApiClient {
     };
   }
 
+  public static async getHealth(): Promise<{ status: string; app: string; database: string; time: string }> {
+    const res = await fetch(this.getUrl('/api/health'), { headers: this.getHeaders() });
+    return res.json();
+  }
+
   public static async getAuthMe(): Promise<{ user: User; dairy: DairyStore }> {
-    const res = await fetch('/api/auth/me', { headers: this.getHeaders() });
+    const res = await fetch(this.getUrl('/api/auth/me'), { headers: this.getHeaders() });
     return res.json();
   }
 
   public static async getDairy(): Promise<DairyStore> {
-    const res = await fetch('/api/dairy', { headers: this.getHeaders() });
+    const res = await fetch(this.getUrl('/api/dairy'), { headers: this.getHeaders() });
     return res.json();
   }
 
   public static async updateDairy(data: Partial<DairyStore>): Promise<DairyStore> {
-    const res = await fetch('/api/dairy', {
+    const res = await fetch(this.getUrl('/api/dairy'), {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify(data)
@@ -52,7 +71,7 @@ export class ApiClient {
   }
 
   public static async getCustomers(search = ''): Promise<Customer[]> {
-    const res = await fetch(`/api/customers?search=${encodeURIComponent(search)}`, {
+    const res = await fetch(this.getUrl(`/api/customers?search=${encodeURIComponent(search)}`), {
       headers: this.getHeaders()
     });
     return res.json();
@@ -64,12 +83,12 @@ export class ApiClient {
     deliveries: DeliveryRecord[];
     invoices: Invoice[];
   }> {
-    const res = await fetch(`/api/customers/${id}`, { headers: this.getHeaders() });
+    const res = await fetch(this.getUrl(`/api/customers/${id}`), { headers: this.getHeaders() });
     return res.json();
   }
 
   public static async createCustomer(data: any): Promise<Customer> {
-    const res = await fetch('/api/customers', {
+    const res = await fetch(this.getUrl('/api/customers'), {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(data)
@@ -82,7 +101,7 @@ export class ApiClient {
   }
 
   public static async updateCustomer(id: string, data: Partial<Customer>): Promise<Customer> {
-    const res = await fetch(`/api/customers/${id}`, {
+    const res = await fetch(this.getUrl(`/api/customers/${id}`), {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify(data)
@@ -91,12 +110,12 @@ export class ApiClient {
   }
 
   public static async getProducts(): Promise<Product[]> {
-    const res = await fetch('/api/products', { headers: this.getHeaders() });
+    const res = await fetch(this.getUrl('/api/products'), { headers: this.getHeaders() });
     return res.json();
   }
 
   public static async createProduct(data: Partial<Product>): Promise<Product> {
-    const res = await fetch('/api/products', {
+    const res = await fetch(this.getUrl('/api/products'), {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(data)
@@ -105,7 +124,7 @@ export class ApiClient {
   }
 
   public static async updateProduct(id: string, data: Partial<Product>): Promise<Product> {
-    const res = await fetch(`/api/products/${id}`, {
+    const res = await fetch(this.getUrl(`/api/products/${id}`), {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify(data)
@@ -114,12 +133,12 @@ export class ApiClient {
   }
 
   public static async getSubscriptions(): Promise<Subscription[]> {
-    const res = await fetch('/api/subscriptions', { headers: this.getHeaders() });
+    const res = await fetch(this.getUrl('/api/subscriptions'), { headers: this.getHeaders() });
     return res.json();
   }
 
   public static async pauseSubscription(id: string, fromDate: string, toDate: string, reason: string): Promise<Subscription> {
-    const res = await fetch(`/api/subscriptions/${id}/pause`, {
+    const res = await fetch(this.getUrl(`/api/subscriptions/${id}/pause`), {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ fromDate, toDate, reason })
@@ -132,7 +151,7 @@ export class ApiClient {
   }
 
   public static async resumeSubscription(id: string): Promise<Subscription> {
-    const res = await fetch(`/api/subscriptions/${id}/resume`, {
+    const res = await fetch(this.getUrl(`/api/subscriptions/${id}/resume`), {
       method: 'POST',
       headers: this.getHeaders()
     });
@@ -140,7 +159,7 @@ export class ApiClient {
   }
 
   public static async updateSubscription(id: string, data: Partial<Subscription>): Promise<Subscription> {
-    const res = await fetch(`/api/subscriptions/${id}`, {
+    const res = await fetch(this.getUrl(`/api/subscriptions/${id}`), {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify(data)
@@ -150,12 +169,12 @@ export class ApiClient {
 
   public static async getDeliveries(params?: { date?: string; status?: string; customerId?: string; time?: string }): Promise<DeliveryRecord[]> {
     const query = new URLSearchParams(params as any).toString();
-    const res = await fetch(`/api/deliveries?${query}`, { headers: this.getHeaders() });
+    const res = await fetch(this.getUrl(`/api/deliveries?${query}`), { headers: this.getHeaders() });
     return res.json();
   }
 
   public static async updateDeliveryStatus(id: string, status: string, notes?: string): Promise<DeliveryRecord> {
-    const res = await fetch(`/api/deliveries/${id}/status`, {
+    const res = await fetch(this.getUrl(`/api/deliveries/${id}/status`), {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify({ status, notes })
@@ -165,18 +184,18 @@ export class ApiClient {
 
   public static async getInvoices(customerId?: string): Promise<Invoice[]> {
     const query = customerId ? `?customerId=${customerId}` : '';
-    const res = await fetch(`/api/invoices${query}`, { headers: this.getHeaders() });
+    const res = await fetch(this.getUrl(`/api/invoices${query}`), { headers: this.getHeaders() });
     return res.json();
   }
 
   public static async getPayments(customerId?: string): Promise<Payment[]> {
     const query = customerId ? `?customerId=${customerId}` : '';
-    const res = await fetch(`/api/payments${query}`, { headers: this.getHeaders() });
+    const res = await fetch(this.getUrl(`/api/payments${query}`), { headers: this.getHeaders() });
     return res.json();
   }
 
   public static async recordPayment(invoiceId: string, amount: number, paymentMethod: string, notes?: string): Promise<{ payment: Payment; invoice: Invoice }> {
-    const res = await fetch('/api/payments', {
+    const res = await fetch(this.getUrl('/api/payments'), {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ invoiceId, amount, paymentMethod, notes })
@@ -193,28 +212,28 @@ export class ApiClient {
     dailyRevenueSeries: Array<{ day: string; revenue: number; volume: number }>;
     milkTypeDistribution: Array<{ name: string; percentage: number; volumeL: number; price: number }>;
   }> {
-    const res = await fetch('/api/reports', { headers: this.getHeaders() });
+    const res = await fetch(this.getUrl('/api/reports'), { headers: this.getHeaders() });
     return res.json();
   }
 
   public static async getNotifications(customerId?: string): Promise<NotificationItem[]> {
     const query = customerId ? `?customerId=${customerId}` : '';
-    const res = await fetch(`/api/notifications${query}`, { headers: this.getHeaders() });
+    const res = await fetch(this.getUrl(`/api/notifications${query}`), { headers: this.getHeaders() });
     return res.json();
   }
 
   public static async markNotificationRead(id: string): Promise<void> {
-    await fetch(`/api/notifications/${id}/read`, { method: 'PUT', headers: this.getHeaders() });
+    await fetch(this.getUrl(`/api/notifications/${id}/read`), { method: 'PUT', headers: this.getHeaders() });
   }
 
   public static async getEcommerceOrders(customerId?: string): Promise<EcommerceOrder[]> {
     const query = customerId ? `?customerId=${customerId}` : '';
-    const res = await fetch(`/api/ecommerce/orders${query}`, { headers: this.getHeaders() });
+    const res = await fetch(this.getUrl(`/api/ecommerce/orders${query}`), { headers: this.getHeaders() });
     return res.json();
   }
 
   public static async createEcommerceOrder(orderData: any): Promise<EcommerceOrder> {
-    const res = await fetch('/api/ecommerce/orders', {
+    const res = await fetch(this.getUrl('/api/ecommerce/orders'), {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(orderData)
@@ -227,7 +246,7 @@ export class ApiClient {
   }
 
   public static async updateEcommerceOrderStatus(id: string, status: string, staffId?: string, staffName?: string): Promise<EcommerceOrder> {
-    const res = await fetch(`/api/ecommerce/orders/${id}/status`, {
+    const res = await fetch(this.getUrl(`/api/ecommerce/orders/${id}/status`), {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify({ status, staffId, staffName })
@@ -237,7 +256,7 @@ export class ApiClient {
 
   // Auth API
   public static async login(phoneOrEmail: string, role?: string, otp?: string, password?: string): Promise<AuthSession> {
-    const res = await fetch('/api/auth/login', {
+    const res = await fetch(this.getUrl('/api/auth/login'), {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ phoneOrEmail, role, otp, password })
@@ -250,7 +269,7 @@ export class ApiClient {
   }
 
   public static async registerCustomer(data: { name: string; phone: string; email?: string; address: string; milkType: string; quantity: number }): Promise<{ user: User; customer: Customer }> {
-    const res = await fetch('/api/auth/register', {
+    const res = await fetch(this.getUrl('/api/auth/register'), {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(data)
@@ -265,12 +284,12 @@ export class ApiClient {
   // Service Tickets / Helpdesk API
   public static async getServiceTickets(customerId?: string): Promise<ServiceTicket[]> {
     const query = customerId ? `?customerId=${customerId}` : '';
-    const res = await fetch(`/api/service-tickets${query}`, { headers: this.getHeaders() });
+    const res = await fetch(this.getUrl(`/api/service-tickets${query}`), { headers: this.getHeaders() });
     return res.json();
   }
 
   public static async createServiceTicket(data: any): Promise<ServiceTicket> {
-    const res = await fetch('/api/service-tickets', {
+    const res = await fetch(this.getUrl('/api/service-tickets'), {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(data)
@@ -283,7 +302,7 @@ export class ApiClient {
   }
 
   public static async updateServiceTicketStatus(id: string, status: string, resolutionNote?: string): Promise<ServiceTicket> {
-    const res = await fetch(`/api/service-tickets/${id}/status`, {
+    const res = await fetch(this.getUrl(`/api/service-tickets/${id}/status`), {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify({ status, resolutionNote })
