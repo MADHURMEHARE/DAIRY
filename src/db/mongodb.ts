@@ -185,45 +185,54 @@ export const ServiceTicketModel = mongoose.models.ServiceTicket || mongoose.mode
 export const UserModel = mongoose.models.User || mongoose.model('User', UserSchema);
 export const NotificationModel = mongoose.models.Notification || mongoose.model('Notification', NotificationSchema);
 
-let isConnected = false;
+let cachedPromise: Promise<boolean> | null = null;
 
 export async function connectMongoDB(): Promise<boolean> {
   const uri = process.env.MONGODB_URI;
   if (!uri || uri.trim() === '') {
-    console.log('[MongoDB] MONGODB_URI environment variable is empty. Using memory data store.');
     return false;
   }
 
-  if (isConnected) return true;
-
-  try {
-    // Set low timeout so startup is fast even if connection fails
-    await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 3000,
-      connectTimeoutMS: 3000,
-    });
-    isConnected = true;
-    console.log('[MongoDB] Successfully connected to MongoDB database!');
-
-    // Seed initial collections if empty
-    await seedDatabaseIfEmpty();
+  // Reuse active connection if ready
+  if (mongoose.connection.readyState === 1) {
     return true;
-  } catch (err: any) {
-    console.warn('[MongoDB] Unable to connect to MongoDB Atlas cluster.');
-    if (err?.name === 'MongooseServerSelectionError' || err?.message?.includes('whitelist')) {
-      console.warn('💡 HINT for MongoDB Atlas: Ensure 0.0.0.0/0 is added to your MongoDB Atlas Network Access / IP Whitelist.');
-    } else {
-      console.warn(`[MongoDB Detail]: ${err?.message || err}`);
-    }
-    console.log('🔄 Gracefully falling back to high-performance in-memory database store.');
-    
-    // Disconnect any partial connection state to prevent background retry spam
-    try {
-      await mongoose.disconnect();
-    } catch (_) {}
-    
-    return false;
   }
+
+  // Return ongoing connection promise if present
+  if (cachedPromise) {
+    return cachedPromise;
+  }
+
+  cachedPromise = (async () => {
+    try {
+      await mongoose.connect(uri, {
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 5000,
+      });
+      console.log('[MongoDB] Successfully connected to MongoDB database!');
+
+      // Seed initial collections if empty
+      await seedDatabaseIfEmpty();
+      return true;
+    } catch (err: any) {
+      cachedPromise = null; // Clear cached promise on failure so next request can retry
+      console.warn('[MongoDB] Unable to connect to MongoDB Atlas cluster.');
+      if (err?.name === 'MongooseServerSelectionError' || err?.message?.includes('whitelist')) {
+        console.warn('💡 HINT for MongoDB Atlas: Ensure 0.0.0.0/0 is added to your MongoDB Atlas Network Access / IP Whitelist.');
+      } else {
+        console.warn(`[MongoDB Detail]: ${err?.message || err}`);
+      }
+      console.log('🔄 Falling back to high-performance in-memory database store.');
+
+      try {
+        await mongoose.disconnect();
+      } catch (_) {}
+
+      return false;
+    }
+  })();
+
+  return cachedPromise;
 }
 
 async function seedDatabaseIfEmpty() {

@@ -36,6 +36,11 @@ export class ApiClient {
 
   private static getUrl(path: string): string {
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    if (!this.baseUrl) return cleanPath;
+    // If baseUrl matches current window origin, prefer relative path for maximum reliability
+    if (typeof window !== 'undefined' && this.baseUrl === window.location.origin) {
+      return cleanPath;
+    }
     return `${this.baseUrl}${cleanPath}`;
   }
 
@@ -46,35 +51,70 @@ export class ApiClient {
     };
   }
 
+  private static async request<T = any>(path: string, options?: RequestInit): Promise<T> {
+    try {
+      const url = this.getUrl(path);
+      const res = await fetch(url, {
+        ...options,
+        headers: {
+          ...this.getHeaders(),
+          ...(options?.headers || {})
+        }
+      });
+
+      if (!res.ok) {
+        let errMessage = `HTTP error ${res.status}`;
+        try {
+          const errData = await res.json();
+          if (errData && errData.error) errMessage = errData.error;
+        } catch (_) {}
+        throw new Error(errMessage);
+      }
+
+      return await res.json();
+    } catch (err: any) {
+      // If fetching external baseUrl failed, attempt fallback to relative URL on current origin
+      if (this.baseUrl && typeof window !== 'undefined') {
+        try {
+          const cleanPath = path.startsWith('/') ? path : `/${path}`;
+          const fallbackRes = await fetch(cleanPath, {
+            ...options,
+            headers: {
+              ...this.getHeaders(),
+              ...(options?.headers || {})
+            }
+          });
+          if (fallbackRes.ok) {
+            return await fallbackRes.json();
+          }
+        } catch (_) {}
+      }
+      console.error(`[API Client Error on ${path}]:`, err?.message || err);
+      throw err;
+    }
+  }
+
   public static async getHealth(): Promise<{ status: string; app: string; database: string; time: string }> {
-    const res = await fetch(this.getUrl('/api/health'), { headers: this.getHeaders() });
-    return res.json();
+    return this.request('/api/health');
   }
 
   public static async getAuthMe(): Promise<{ user: User; dairy: DairyStore }> {
-    const res = await fetch(this.getUrl('/api/auth/me'), { headers: this.getHeaders() });
-    return res.json();
+    return this.request('/api/auth/me');
   }
 
   public static async getDairy(): Promise<DairyStore> {
-    const res = await fetch(this.getUrl('/api/dairy'), { headers: this.getHeaders() });
-    return res.json();
+    return this.request('/api/dairy');
   }
 
   public static async updateDairy(data: Partial<DairyStore>): Promise<DairyStore> {
-    const res = await fetch(this.getUrl('/api/dairy'), {
+    return this.request('/api/dairy', {
       method: 'PUT',
-      headers: this.getHeaders(),
       body: JSON.stringify(data)
     });
-    return res.json();
   }
 
   public static async getCustomers(search = ''): Promise<Customer[]> {
-    const res = await fetch(this.getUrl(`/api/customers?search=${encodeURIComponent(search)}`), {
-      headers: this.getHeaders()
-    });
-    return res.json();
+    return this.request(`/api/customers?search=${encodeURIComponent(search)}`);
   }
 
   public static async getCustomerDetails(id: string): Promise<{
@@ -83,128 +123,92 @@ export class ApiClient {
     deliveries: DeliveryRecord[];
     invoices: Invoice[];
   }> {
-    const res = await fetch(this.getUrl(`/api/customers/${id}`), { headers: this.getHeaders() });
-    return res.json();
+    return this.request(`/api/customers/${id}`);
   }
 
   public static async createCustomer(data: any): Promise<Customer> {
-    const res = await fetch(this.getUrl('/api/customers'), {
+    return this.request('/api/customers', {
       method: 'POST',
-      headers: this.getHeaders(),
       body: JSON.stringify(data)
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to create customer');
-    }
-    return res.json();
   }
 
   public static async updateCustomer(id: string, data: Partial<Customer>): Promise<Customer> {
-    const res = await fetch(this.getUrl(`/api/customers/${id}`), {
+    return this.request(`/api/customers/${id}`, {
       method: 'PUT',
-      headers: this.getHeaders(),
       body: JSON.stringify(data)
     });
-    return res.json();
   }
 
   public static async getProducts(): Promise<Product[]> {
-    const res = await fetch(this.getUrl('/api/products'), { headers: this.getHeaders() });
-    return res.json();
+    return this.request('/api/products');
   }
 
   public static async createProduct(data: Partial<Product>): Promise<Product> {
-    const res = await fetch(this.getUrl('/api/products'), {
+    return this.request('/api/products', {
       method: 'POST',
-      headers: this.getHeaders(),
       body: JSON.stringify(data)
     });
-    return res.json();
   }
 
   public static async updateProduct(id: string, data: Partial<Product>): Promise<Product> {
-    const res = await fetch(this.getUrl(`/api/products/${id}`), {
+    return this.request(`/api/products/${id}`, {
       method: 'PUT',
-      headers: this.getHeaders(),
       body: JSON.stringify(data)
     });
-    return res.json();
   }
 
   public static async getSubscriptions(): Promise<Subscription[]> {
-    const res = await fetch(this.getUrl('/api/subscriptions'), { headers: this.getHeaders() });
-    return res.json();
+    return this.request('/api/subscriptions');
   }
 
   public static async pauseSubscription(id: string, fromDate: string, toDate: string, reason: string): Promise<Subscription> {
-    const res = await fetch(this.getUrl(`/api/subscriptions/${id}/pause`), {
+    return this.request(`/api/subscriptions/${id}/pause`, {
       method: 'POST',
-      headers: this.getHeaders(),
       body: JSON.stringify({ fromDate, toDate, reason })
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to pause subscription');
-    }
-    return res.json();
   }
 
   public static async resumeSubscription(id: string): Promise<Subscription> {
-    const res = await fetch(this.getUrl(`/api/subscriptions/${id}/resume`), {
-      method: 'POST',
-      headers: this.getHeaders()
+    return this.request(`/api/subscriptions/${id}/resume`, {
+      method: 'POST'
     });
-    return res.json();
   }
 
   public static async updateSubscription(id: string, data: Partial<Subscription>): Promise<Subscription> {
-    const res = await fetch(this.getUrl(`/api/subscriptions/${id}`), {
+    return this.request(`/api/subscriptions/${id}`, {
       method: 'PUT',
-      headers: this.getHeaders(),
       body: JSON.stringify(data)
     });
-    return res.json();
   }
 
   public static async getDeliveries(params?: { date?: string; status?: string; customerId?: string; time?: string }): Promise<DeliveryRecord[]> {
     const query = new URLSearchParams(params as any).toString();
-    const res = await fetch(this.getUrl(`/api/deliveries?${query}`), { headers: this.getHeaders() });
-    return res.json();
+    return this.request(`/api/deliveries?${query}`);
   }
 
   public static async updateDeliveryStatus(id: string, status: string, notes?: string): Promise<DeliveryRecord> {
-    const res = await fetch(this.getUrl(`/api/deliveries/${id}/status`), {
+    return this.request(`/api/deliveries/${id}/status`, {
       method: 'PUT',
-      headers: this.getHeaders(),
       body: JSON.stringify({ status, notes })
     });
-    return res.json();
   }
 
   public static async getInvoices(customerId?: string): Promise<Invoice[]> {
     const query = customerId ? `?customerId=${customerId}` : '';
-    const res = await fetch(this.getUrl(`/api/invoices${query}`), { headers: this.getHeaders() });
-    return res.json();
+    return this.request(`/api/invoices${query}`);
   }
 
   public static async getPayments(customerId?: string): Promise<Payment[]> {
     const query = customerId ? `?customerId=${customerId}` : '';
-    const res = await fetch(this.getUrl(`/api/payments${query}`), { headers: this.getHeaders() });
-    return res.json();
+    return this.request(`/api/payments${query}`);
   }
 
   public static async recordPayment(invoiceId: string, amount: number, paymentMethod: string, notes?: string): Promise<{ payment: Payment; invoice: Invoice }> {
-    const res = await fetch(this.getUrl('/api/payments'), {
+    return this.request('/api/payments', {
       method: 'POST',
-      headers: this.getHeaders(),
       body: JSON.stringify({ invoiceId, amount, paymentMethod, notes })
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Payment failed');
-    }
-    return res.json();
   }
 
   public static async getReports(): Promise<{
@@ -212,102 +216,72 @@ export class ApiClient {
     dailyRevenueSeries: Array<{ day: string; revenue: number; volume: number }>;
     milkTypeDistribution: Array<{ name: string; percentage: number; volumeL: number; price: number }>;
   }> {
-    const res = await fetch(this.getUrl('/api/reports'), { headers: this.getHeaders() });
-    return res.json();
+    return this.request('/api/reports');
   }
 
   public static async getNotifications(customerId?: string): Promise<NotificationItem[]> {
     const query = customerId ? `?customerId=${customerId}` : '';
-    const res = await fetch(this.getUrl(`/api/notifications${query}`), { headers: this.getHeaders() });
-    return res.json();
+    return this.request(`/api/notifications${query}`);
   }
 
   public static async markNotificationRead(id: string): Promise<void> {
-    await fetch(this.getUrl(`/api/notifications/${id}/read`), { method: 'PUT', headers: this.getHeaders() });
+    return this.request(`/api/notifications/${id}/read`, {
+      method: 'PUT'
+    });
   }
 
   public static async getEcommerceOrders(customerId?: string): Promise<EcommerceOrder[]> {
     const query = customerId ? `?customerId=${customerId}` : '';
-    const res = await fetch(this.getUrl(`/api/ecommerce/orders${query}`), { headers: this.getHeaders() });
-    return res.json();
+    return this.request(`/api/ecommerce/orders${query}`);
   }
 
   public static async createEcommerceOrder(orderData: any): Promise<EcommerceOrder> {
-    const res = await fetch(this.getUrl('/api/ecommerce/orders'), {
+    return this.request('/api/ecommerce/orders', {
       method: 'POST',
-      headers: this.getHeaders(),
       body: JSON.stringify(orderData)
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to place order');
-    }
-    return res.json();
   }
 
   public static async updateEcommerceOrderStatus(id: string, status: string, staffId?: string, staffName?: string): Promise<EcommerceOrder> {
-    const res = await fetch(this.getUrl(`/api/ecommerce/orders/${id}/status`), {
+    return this.request(`/api/ecommerce/orders/${id}/status`, {
       method: 'PUT',
-      headers: this.getHeaders(),
       body: JSON.stringify({ status, staffId, staffName })
     });
-    return res.json();
   }
 
   // Auth API
   public static async login(phoneOrEmail: string, role?: string, otp?: string, password?: string): Promise<AuthSession> {
-    const res = await fetch(this.getUrl('/api/auth/login'), {
+    return this.request('/api/auth/login', {
       method: 'POST',
-      headers: this.getHeaders(),
       body: JSON.stringify({ phoneOrEmail, role, otp, password })
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Login failed');
-    }
-    return res.json();
   }
 
   public static async registerCustomer(data: { name: string; phone: string; email?: string; address: string; milkType: string; quantity: number }): Promise<{ user: User; customer: Customer }> {
-    const res = await fetch(this.getUrl('/api/auth/register'), {
+    return this.request('/api/auth/register', {
       method: 'POST',
-      headers: this.getHeaders(),
       body: JSON.stringify(data)
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Registration failed');
-    }
-    return res.json();
   }
 
   // Service Tickets / Helpdesk API
   public static async getServiceTickets(customerId?: string): Promise<ServiceTicket[]> {
     const query = customerId ? `?customerId=${customerId}` : '';
-    const res = await fetch(this.getUrl(`/api/service-tickets${query}`), { headers: this.getHeaders() });
-    return res.json();
+    return this.request(`/api/service-tickets${query}`);
   }
 
   public static async createServiceTicket(data: any): Promise<ServiceTicket> {
-    const res = await fetch(this.getUrl('/api/service-tickets'), {
+    return this.request('/api/service-tickets', {
       method: 'POST',
-      headers: this.getHeaders(),
       body: JSON.stringify(data)
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to submit service request');
-    }
-    return res.json();
   }
 
   public static async updateServiceTicketStatus(id: string, status: string, resolutionNote?: string): Promise<ServiceTicket> {
-    const res = await fetch(this.getUrl(`/api/service-tickets/${id}/status`), {
+    return this.request(`/api/service-tickets/${id}/status`, {
       method: 'PUT',
-      headers: this.getHeaders(),
       body: JSON.stringify({ status, resolutionNote })
     });
-    return res.json();
   }
 }
 
