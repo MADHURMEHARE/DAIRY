@@ -1,0 +1,6 @@
+{
+  "name": "Anandwan Milk Dairy",
+  "description": "Digital dairy subscription & e-commerce store platform for fresh milk, paneer, bilona ghee and sweets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
