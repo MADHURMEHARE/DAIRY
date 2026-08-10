@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { LifeBuoy, Plus, Clock, CheckCircle2, AlertCircle, Phone, MessageSquare, Send, RefreshCw } from 'lucide-react';
-import { ServiceTicket, TicketCategory } from '../../types';
+import { ServiceTicket, TicketCategory, User } from '../../types';
 import { ApiClient } from '../../api/client';
+import { getActiveCustomerId } from '../../utils/userUtils';
 
-export const CustomerServiceView: React.FC = () => {
+interface CustomerServiceViewProps {
+  currentUser?: User | null;
+}
+
+export const CustomerServiceView: React.FC<CustomerServiceViewProps> = ({ currentUser }) => {
   const [tickets, setTickets] = useState<ServiceTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -17,12 +22,13 @@ export const CustomerServiceView: React.FC = () => {
 
   useEffect(() => {
     loadTickets();
-  }, []);
+  }, [currentUser]);
 
   const loadTickets = async () => {
     setIsLoading(true);
     try {
-      const data = await ApiClient.getServiceTickets('cust_rahul_01');
+      const activeCustId = getActiveCustomerId(currentUser);
+      const data = await ApiClient.getServiceTickets(activeCustId);
       setTickets(data);
     } catch (e) {
       console.error(e);
@@ -40,10 +46,11 @@ export const CustomerServiceView: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      const activeCustId = getActiveCustomerId(currentUser);
       await ApiClient.createServiceTicket({
-        customerId: 'cust_rahul_01',
-        customerName: 'Rahul Patil',
-        customerPhone: '+91 98230 11223',
+        customerId: activeCustId,
+        customerName: currentUser?.name || 'Valued Customer',
+        customerPhone: currentUser?.phone || '',
         category,
         subject,
         description,

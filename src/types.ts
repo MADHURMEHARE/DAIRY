@@ -260,6 +260,16 @@ export interface ServiceTicket {
   updatedAt?: string;
 }
 
+export interface UserAddress {
+  id: string;
+  userId: string;
+  label: string; // e.g. "Home", "Office"
+  addressLine: string;
+  city: string;
+  pincode: string;
+  isDefault?: boolean;
+}
+
 export interface AuthSession {
   user: User;
   token: string;

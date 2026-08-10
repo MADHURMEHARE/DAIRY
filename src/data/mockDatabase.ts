@@ -12,7 +12,9 @@ import {
   DashboardOverview,
   User,
   EcommerceOrder,
-  ServiceTicket
+  ServiceTicket,
+  CartItem,
+  UserAddress
 } from '../types';
 
 export const JWT_SECRET = process.env.JWT_SECRET || '9f8a3d2b7e1c4a0f8d6e3c2b1a9f4e7d0c8b5a2f6e3c1d9a4f7b0e8c5d2a6f1';
@@ -958,6 +960,133 @@ class DairyDataStore {
   public notifications: NotificationItem[] = [...INITIAL_NOTIFICATIONS];
   public staff: DeliveryStaff[] = [...INITIAL_STAFF];
   public ecommerceOrders: EcommerceOrder[] = [...INITIAL_ECOMMERCE_ORDERS];
+
+  // Isolated user-specific data stores
+  public carts: Map<string, CartItem[]> = new Map();
+  public wishlists: Map<string, string[]> = new Map();
+  public addresses: Map<string, UserAddress[]> = new Map([
+    [
+      'user_cust_01',
+      [
+        {
+          id: 'addr_rahul_01',
+          userId: 'user_cust_01',
+          label: 'Home',
+          addressLine: 'Flat 302, Sai Heights, Camp Road',
+          city: 'Amravati',
+          pincode: '444602',
+          isDefault: true
+        }
+      ]
+    ],
+    [
+      'user_cust_02',
+      [
+        {
+          id: 'addr_amit_01',
+          userId: 'user_cust_02',
+          label: 'Home',
+          addressLine: 'Bungalow 12, Gulshan Colony',
+          city: 'Amravati',
+          pincode: '444606',
+          isDefault: true
+        }
+      ]
+    ]
+  ]);
+
+  // Cart Helper Methods (Isolated per userId)
+  public getCart(userId: string): CartItem[] {
+    return this.carts.get(userId) || [];
+  }
+
+  public setCart(userId: string, items: CartItem[]): CartItem[] {
+    this.carts.set(userId, items);
+    return items;
+  }
+
+  public addToCart(userId: string, product: Product, quantity: number = 1): CartItem[] {
+    const currentCart = [...this.getCart(userId)];
+    const existingIndex = currentCart.findIndex((item) => item.product.id === product.id);
+    if (existingIndex > -1) {
+      currentCart[existingIndex] = {
+        ...currentCart[existingIndex],
+        quantity: currentCart[existingIndex].quantity + quantity
+      };
+    } else {
+      currentCart.push({ product, quantity });
+    }
+    this.carts.set(userId, currentCart);
+    return currentCart;
+  }
+
+  public updateCartQuantity(userId: string, productId: string, quantity: number): CartItem[] {
+    let currentCart = [...this.getCart(userId)];
+    if (quantity <= 0) {
+      currentCart = currentCart.filter((item) => item.product.id !== productId);
+    } else {
+      currentCart = currentCart.map((item) =>
+        item.product.id === productId ? { ...item, quantity } : item
+      );
+    }
+    this.carts.set(userId, currentCart);
+    return currentCart;
+  }
+
+  public removeFromCart(userId: string, productId: string): CartItem[] {
+    const currentCart = this.getCart(userId).filter((item) => item.product.id !== productId);
+    this.carts.set(userId, currentCart);
+    return currentCart;
+  }
+
+  public clearCart(userId: string): void {
+    this.carts.set(userId, []);
+  }
+
+  // Wishlist Helper Methods (Isolated per userId)
+  public getWishlist(userId: string): string[] {
+    return this.wishlists.get(userId) || [];
+  }
+
+  public toggleWishlist(userId: string, productId: string): string[] {
+    const current = this.getWishlist(userId);
+    let updated: string[];
+    if (current.includes(productId)) {
+      updated = current.filter((id) => id !== productId);
+    } else {
+      updated = [...current, productId];
+    }
+    this.wishlists.set(userId, updated);
+    return updated;
+  }
+
+  // Address Helper Methods (Isolated per userId)
+  public getAddresses(userId: string): UserAddress[] {
+    return this.addresses.get(userId) || [];
+  }
+
+  public addAddress(userId: string, label: string, addressLine: string, city: string, pincode: string): UserAddress {
+    const userAddresses = [...this.getAddresses(userId)];
+    const newAddress: UserAddress = {
+      id: `addr_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      userId,
+      label: label || 'Home',
+      addressLine,
+      city: city || 'Amravati',
+      pincode: pincode || '444601',
+      isDefault: userAddresses.length === 0
+    };
+    userAddresses.push(newAddress);
+    this.addresses.set(userId, userAddresses);
+    return newAddress;
+  }
+
+  public deleteAddress(userId: string, addressId: string): boolean {
+    const userAddresses = this.getAddresses(userId);
+    const updated = userAddresses.filter((a) => a.id !== addressId);
+    this.addresses.set(userId, updated);
+    return true;
+  }
 
   // Overview stats calculation
   public getOverview(): DashboardOverview {

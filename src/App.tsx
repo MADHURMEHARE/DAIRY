@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserRole, Product, CartItem, User } from './types';
+import { ApiClient } from './api/client';
 import { Navbar } from './components/Navbar';
 import { AdminLayout } from './components/AdminLayout';
 import { CustomerLayout } from './components/CustomerLayout';
@@ -34,7 +35,7 @@ import { MasterAdminView } from './views/master_admin/MasterAdminView';
 import { DeliveryStaffView } from './views/delivery/DeliveryStaffView';
 
 export default function App() {
-  const [currentRole, setCurrentRole] = useState<UserRole>('ADMIN');
+  const [currentRole, setCurrentRole] = useState<UserRole>('CUSTOMER');
   const [adminTab, setAdminTab] = useState<string>('dashboard');
   const [customerTab, setCustomerTab] = useState<string>('shop');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -50,18 +51,32 @@ export default function App() {
       if (saved) {
         const u: User = JSON.parse(saved);
         setCurrentUser(u);
-        setCurrentRole(u.role);
+        setCurrentRole(u.role || 'CUSTOMER');
+        ApiClient.setRole(u.role || 'CUSTOMER');
+      } else {
+        ApiClient.setRole(currentRole);
       }
     } catch (e) {
       console.error(e);
     }
   }, []);
 
+  useEffect(() => {
+    ApiClient.setRole(currentRole);
+  }, [currentRole]);
+
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
     setCurrentRole(user.role);
     if (user.role === 'ADMIN') setAdminTab('dashboard');
     if (user.role === 'CUSTOMER') setCustomerTab('shop');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('anandwan_user');
+    setCurrentUser(null);
+    setCurrentRole('CUSTOMER');
+    setCustomerTab('shop');
   };
 
   const handleAddToCart = (product: Product) => {
@@ -93,16 +108,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FDFCF9] font-sans text-[#081C15] antialiased selection:bg-[#1B4332] selection:text-white">
-      {/* Top Navbar with Role Switcher & Auth Modal Trigger */}
+      {/* Top Navbar with Role Status & Auth Modal Trigger */}
       <Navbar
         currentRole={currentRole}
         currentUser={currentUser}
         onOpenAuth={() => setShowAuthModal(true)}
-        onRoleChange={(role) => {
-          setCurrentRole(role);
-          if (role === 'ADMIN') setAdminTab('dashboard');
-          if (role === 'CUSTOMER') setCustomerTab('shop');
-        }}
+        onLogout={handleLogout}
       />
 
       {/* Auth Modal */}
@@ -136,9 +147,10 @@ export default function App() {
       {/* CUSTOMER ROLE VIEW */}
       {currentRole === 'CUSTOMER' && (
         <CustomerLayout activeTab={customerTab} onSelectTab={setCustomerTab} cartCount={totalCartCount}>
-          {customerTab === 'home' && <CustomerHomeView onNavigate={setCustomerTab} />}
+          {customerTab === 'home' && <CustomerHomeView currentUser={currentUser} onNavigate={setCustomerTab} />}
           {customerTab === 'shop' && (
             <CustomerShopView
+              currentUser={currentUser}
               cart={cart}
               onAddToCart={handleAddToCart}
               onUpdateQuantity={handleUpdateCartQuantity}
@@ -146,12 +158,12 @@ export default function App() {
               onNavigateToOrders={() => setCustomerTab('orders')}
             />
           )}
-          {customerTab === 'orders' && <CustomerOrdersView onGoToShop={() => setCustomerTab('shop')} />}
-          {customerTab === 'deliveries' && <CustomerDeliveriesView />}
-          {customerTab === 'bills' && <CustomerBillsView />}
-          {customerTab === 'subscription' && <CustomerSubscriptionView />}
-          {customerTab === 'service' && <CustomerServiceView />}
-          {customerTab === 'account' && <CustomerAccountView />}
+          {customerTab === 'orders' && <CustomerOrdersView currentUser={currentUser} onGoToShop={() => setCustomerTab('shop')} />}
+          {customerTab === 'deliveries' && <CustomerDeliveriesView currentUser={currentUser} />}
+          {customerTab === 'bills' && <CustomerBillsView currentUser={currentUser} />}
+          {customerTab === 'subscription' && <CustomerSubscriptionView currentUser={currentUser} />}
+          {customerTab === 'service' && <CustomerServiceView currentUser={currentUser} />}
+          {customerTab === 'account' && <CustomerAccountView currentUser={currentUser} />}
         </CustomerLayout>
       )}
 

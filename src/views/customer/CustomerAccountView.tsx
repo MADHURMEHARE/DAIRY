@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { User, Phone, MapPin, ShieldCheck, Bell } from 'lucide-react';
-import { Customer } from '../../types';
+import { User as UserIcon, Phone, MapPin, ShieldCheck, Bell } from 'lucide-react';
+import { Customer, User } from '../../types';
 import { ApiClient } from '../../api/client';
+import { getActiveCustomerId, getInitials } from '../../utils/userUtils';
 
-export const CustomerAccountView: React.FC = () => {
+interface CustomerAccountViewProps {
+  currentUser?: User | null;
+}
+
+export const CustomerAccountView: React.FC<CustomerAccountViewProps> = ({ currentUser }) => {
   const [customer, setCustomer] = useState<Customer | null>(null);
 
   useEffect(() => {
-    ApiClient.getCustomerDetails('cust_rahul_01').then((res) => setCustomer(res.customer));
-  }, []);
+    const activeCustId = getActiveCustomerId(currentUser);
+    ApiClient.getCustomerDetails(activeCustId).then((res) => setCustomer(res.customer));
+  }, [currentUser]);
 
   if (!customer) return null;
 
@@ -17,7 +23,7 @@ export const CustomerAccountView: React.FC = () => {
       <div className="bg-white p-6 rounded-2xl border border-[#E5E7EB] shadow-xs space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-14 h-14 rounded-full bg-[#1B4332] text-white font-bold text-xl flex items-center justify-center shadow-md">
-            RP
+            {getInitials(customer.name)}
           </div>
           <div>
             <h1 className="text-xl font-bold text-[#081C15]">{customer.name}</h1>

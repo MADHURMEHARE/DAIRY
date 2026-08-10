@@ -1,24 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { PackageCheck, Clock, CheckCircle2, Truck, AlertCircle, ChevronRight, ShoppingBag } from 'lucide-react';
-import { EcommerceOrder, EcommerceOrderStatus } from '../../types';
+import { EcommerceOrder, EcommerceOrderStatus, User } from '../../types';
 import { ApiClient } from '../../api/client';
+import { getActiveCustomerId } from '../../utils/userUtils';
 
 interface CustomerOrdersViewProps {
   onGoToShop: () => void;
+  currentUser?: User | null;
 }
 
-export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ onGoToShop }) => {
+export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({ onGoToShop, currentUser }) => {
   const [orders, setOrders] = useState<EcommerceOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadOrders();
-  }, []);
+  }, [currentUser]);
 
   const loadOrders = async () => {
     setIsLoading(true);
     try {
-      const list = await ApiClient.getEcommerceOrders('cust_rahul_01');
+      const activeCustId = getActiveCustomerId(currentUser);
+      const list = await ApiClient.getEcommerceOrders(activeCustId);
       setOrders(list);
     } catch (e) {
       console.error('Error fetching orders:', e);

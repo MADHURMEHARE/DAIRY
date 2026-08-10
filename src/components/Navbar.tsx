@@ -5,24 +5,25 @@ import { ApiClient } from '../api/client';
 
 interface NavbarProps {
   currentRole: UserRole;
-  onRoleChange: (role: UserRole) => void;
+  onRoleChange?: (role: UserRole) => void;
   activeTab?: string;
   currentUser?: User | null;
   onOpenAuth?: () => void;
+  onLogout?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentRole, onRoleChange, currentUser, onOpenAuth }) => {
+export const Navbar: React.FC<NavbarProps> = ({ currentRole, currentUser, onOpenAuth, onLogout }) => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [showNotifDrawer, setShowNotifDrawer] = useState(false);
 
-
   useEffect(() => {
     fetchNotifications();
-  }, [currentRole]);
+  }, [currentRole, currentUser]);
 
   const fetchNotifications = async () => {
     try {
-      const data = await ApiClient.getNotifications(currentRole === 'CUSTOMER' ? 'cust_rahul_01' : undefined);
+      const customerId = currentUser?.role === 'CUSTOMER' ? currentUser.id : undefined;
+      const data = await ApiClient.getNotifications(customerId);
       setNotifications(data);
     } catch (e) {
       // ignore error
@@ -57,28 +58,15 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRole, onRoleChange, curre
 
         {/* Right Actions: Notifications & User Account */}
         <div className="flex items-center gap-3">
-          {/* Active Role Badge & Switcher */}
-          <div className="hidden sm:flex items-center gap-1 bg-[#F7F9F7] p-1 rounded-xl border border-[#E5E7EB] text-xs font-bold">
-            <button
-              onClick={() => onRoleChange('CUSTOMER')}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                currentRole === 'CUSTOMER'
-                  ? 'bg-[#1B4332] text-white shadow-2xs'
-                  : 'text-[#52796F] hover:text-[#081C15]'
-              }`}
-            >
-              <span>👤 Customer</span>
-            </button>
-            <button
-              onClick={() => onRoleChange('ADMIN')}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                currentRole === 'ADMIN' || currentRole === 'MASTER_ADMIN' || currentRole === 'DELIVERY_STAFF'
-                  ? 'bg-[#1B4332] text-white shadow-2xs'
-                  : 'text-[#52796F] hover:text-[#081C15]'
-              }`}
-            >
-              <span>🚜 Owner & Staff</span>
-            </button>
+          {/* Role Status Badge */}
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-[#F7F9F7] rounded-xl border border-[#E5E7EB] text-xs font-bold text-[#1B4332]">
+            <Shield className="w-3.5 h-3.5 text-[#1B4332]" />
+            <span>
+              {currentRole === 'CUSTOMER' && 'Customer Portal'}
+              {currentRole === 'ADMIN' && 'Dairy Owner Portal'}
+              {currentRole === 'MASTER_ADMIN' && 'Master Admin'}
+              {currentRole === 'DELIVERY_STAFF' && 'Delivery App'}
+            </span>
           </div>
 
           {/* Notifications button */}
@@ -138,7 +126,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRole, onRoleChange, curre
             <button
               onClick={onOpenAuth}
               className="flex items-center gap-2 text-left hover:bg-[#F7F9F7] p-1.5 rounded-xl transition-colors cursor-pointer group"
-              title="Click to Sign In or Switch Account"
+              title={currentUser ? "Click to Switch Account" : "Click to Sign In"}
             >
               <div className="w-8 h-8 rounded-full bg-[#1B4332] text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0 group-hover:scale-105 transition-transform">
                 {currentUser?.name
@@ -155,6 +143,15 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRole, onRoleChange, curre
                 </p>
               </div>
             </button>
+            {currentUser && onLogout && (
+              <button
+                onClick={onLogout}
+                className="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer shrink-0"
+                title="Sign Out"
+              >
+                Sign Out
+              </button>
+            )}
           </div>
         </div>
       </div>

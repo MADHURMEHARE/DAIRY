@@ -11,11 +11,13 @@ import {
   DashboardOverview,
   EcommerceOrder,
   ServiceTicket,
-  AuthSession
+  AuthSession,
+  CartItem,
+  UserAddress
 } from '../types';
 
 export class ApiClient {
-  private static userRole: string = 'ADMIN';
+  private static userRole: string = 'CUSTOMER';
   private static baseUrl: string = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
   private static jwtToken: string = typeof localStorage !== 'undefined' ? (localStorage.getItem('dairy_jwt_token') || '') : '';
 
@@ -43,6 +45,13 @@ export class ApiClient {
       this.jwtToken = localStorage.getItem('dairy_jwt_token') || '';
     }
     return this.jwtToken;
+  }
+
+  public static logout() {
+    this.jwtToken = '';
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('dairy_jwt_token');
+    }
   }
 
   public static setBaseUrl(url: string) {
@@ -77,13 +86,6 @@ export class ApiClient {
   }
 
   private static async request<T = any>(path: string, options?: RequestInit, retryCount = 0): Promise<T> {
-    const isPublic = ['/api/health', '/api/auth/login', '/api/auth/register', '/api/auth/token'].some((p) => path.startsWith(p));
-    if (!isPublic && !this.getToken()) {
-      try {
-        await this.generateToken(this.userRole);
-      } catch (_) {}
-    }
-
     try {
       const url = this.getUrl(path);
       const res = await fetch(url, {
@@ -93,14 +95,6 @@ export class ApiClient {
           ...(options?.headers || {})
         }
       });
-
-      if (res.status === 401 && !isPublic && retryCount === 0) {
-        this.setToken('');
-        try {
-          await this.generateToken(this.userRole);
-          return await this.request<T>(path, options, 1);
-        } catch (_) {}
-      }
 
       if (!res.ok) {
         let errMessage = `HTTP error ${res.status}`;
@@ -137,7 +131,7 @@ export class ApiClient {
     return this.request('/api/health');
   }
 
-  public static async getAuthMe(): Promise<{ user: User; dairy: DairyStore }> {
+  public static async getAuthMe(): Promise<{ user: User; customer: Customer | null; dairy: DairyStore }> {
     return this.request('/api/auth/me');
   }
 
@@ -197,6 +191,79 @@ export class ApiClient {
     });
   }
 
+  // User Cart API
+  public static async getCart(): Promise<CartItem[]> {
+    return this.request('/api/cart');
+  }
+
+  public static async addToCart(product: Product, quantity = 1): Promise<CartItem[]> {
+    return this.request('/api/cart/items', {
+      method: 'POST',
+      body: JSON.stringify({ product, quantity })
+    });
+  }
+
+  public static async updateCartQuantity(productId: string, quantity: number): Promise<CartItem[]> {
+    return this.request(`/api/cart/items/${productId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ quantity })
+    });
+  }
+
+  public static async removeFromCart(productId: string): Promise<CartItem[]> {
+    return this.request(`/api/cart/items/${productId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  public static async clearCart(): Promise<CartItem[]> {
+    return this.request('/api/cart', {
+      method: 'DELETE'
+    });
+  }
+
+  // Wishlist API
+  public static async getWishlist(): Promise<string[]> {
+    return this.request('/api/wishlist');
+  }
+
+  public static async toggleWishlist(productId: string): Promise<string[]> {
+    return this.request('/api/wishlist/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ productId })
+    });
+  }
+
+  // Address API
+  public static async getAddresses(): Promise<UserAddress[]> {
+    return this.request('/api/addresses');
+  }
+
+  public static async createAddress(data: { label: string; addressLine: string; city?: string; pincode?: string }): Promise<UserAddress> {
+    return this.request('/api/addresses', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  public static async deleteAddress(id: string): Promise<{ success: boolean }> {
+    return this.request(`/api/addresses/${id}`, {
+      method: 'DELETE'
+    });
+  }
+
+  // Profile API
+  public static async getProfile(): Promise<{ user: User; customer: Customer | null }> {
+    return this.request('/api/profile');
+  }
+
+  public static async updateProfile(data: Partial<Customer & User>): Promise<{ user: User; customer: Customer | null }> {
+    return this.request('/api/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  }
+
   public static async getSubscriptions(): Promise<Subscription[]> {
     return this.request('/api/subscriptions');
   }
@@ -222,8 +289,15 @@ export class ApiClient {
   }
 
   public static async getDeliveries(params?: { date?: string; status?: string; customerId?: string; time?: string }): Promise<DeliveryRecord[]> {
-    const query = new URLSearchParams(params as any).toString();
-    return this.request(`/api/deliveries?${query}`);
+    if (!params) return this.request('/api/deliveries');
+    const cleanParams: Record<string, string> = {};
+    Object.entries(params).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== '' && val !== 'undefined') {
+        cleanParams[key] = String(val);
+      }
+    });
+    const query = new URLSearchParams(cleanParams).toString();
+    return this.request(query ? `/api/deliveries?${query}` : '/api/deliveries');
   }
 
   public static async updateDeliveryStatus(id: string, status: string, notes?: string): Promise<DeliveryRecord> {
@@ -234,12 +308,14 @@ export class ApiClient {
   }
 
   public static async getInvoices(customerId?: string): Promise<Invoice[]> {
-    const query = customerId ? `?customerId=${customerId}` : '';
+    const validId = customerId && customerId !== 'undefined' ? customerId : '';
+    const query = validId ? `?customerId=${encodeURIComponent(validId)}` : '';
     return this.request(`/api/invoices${query}`);
   }
 
   public static async getPayments(customerId?: string): Promise<Payment[]> {
-    const query = customerId ? `?customerId=${customerId}` : '';
+    const validId = customerId && customerId !== 'undefined' ? customerId : '';
+    const query = validId ? `?customerId=${encodeURIComponent(validId)}` : '';
     return this.request(`/api/payments${query}`);
   }
 
@@ -259,7 +335,8 @@ export class ApiClient {
   }
 
   public static async getNotifications(customerId?: string): Promise<NotificationItem[]> {
-    const query = customerId ? `?customerId=${customerId}` : '';
+    const validId = customerId && customerId !== 'undefined' ? customerId : '';
+    const query = validId ? `?customerId=${encodeURIComponent(validId)}` : '';
     return this.request(`/api/notifications${query}`);
   }
 
@@ -270,7 +347,8 @@ export class ApiClient {
   }
 
   public static async getEcommerceOrders(customerId?: string): Promise<EcommerceOrder[]> {
-    const query = customerId ? `?customerId=${customerId}` : '';
+    const validId = customerId && customerId !== 'undefined' ? customerId : '';
+    const query = validId ? `?customerId=${encodeURIComponent(validId)}` : '';
     return this.request(`/api/ecommerce/orders${query}`);
   }
 
@@ -289,8 +367,9 @@ export class ApiClient {
   }
 
   // Auth API
-  public static async generateToken(role = 'ADMIN'): Promise<{ token: string; user: User }> {
-    const res = await this.request(`/api/auth/token?role=${encodeURIComponent(role)}`);
+  public static async generateToken(role = 'ADMIN', phone = ''): Promise<{ token: string; user: User }> {
+    const query = phone ? `role=${encodeURIComponent(role)}&phone=${encodeURIComponent(phone)}` : `role=${encodeURIComponent(role)}`;
+    const res = await this.request(`/api/auth/token?${query}`);
     if (res && res.token) {
       this.setToken(res.token);
     }
@@ -327,7 +406,8 @@ export class ApiClient {
 
   // Service Tickets / Helpdesk API
   public static async getServiceTickets(customerId?: string): Promise<ServiceTicket[]> {
-    const query = customerId ? `?customerId=${customerId}` : '';
+    const validId = customerId && customerId !== 'undefined' ? customerId : '';
+    const query = validId ? `?customerId=${encodeURIComponent(validId)}` : '';
     return this.request(`/api/service-tickets${query}`);
   }
 
@@ -345,4 +425,3 @@ export class ApiClient {
     });
   }
 }
-

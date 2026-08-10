@@ -1,21 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
-import { Invoice } from '../../types';
+import { Invoice, User } from '../../types';
 import { ApiClient } from '../../api/client';
 import { InvoiceModal } from '../../components/InvoiceModal';
 import { RazorpayModal } from '../../components/RazorpayModal';
+import { getActiveCustomerId } from '../../utils/userUtils';
 
-export const CustomerBillsView: React.FC = () => {
+interface CustomerBillsViewProps {
+  currentUser?: User | null;
+}
+
+export const CustomerBillsView: React.FC<CustomerBillsViewProps> = ({ currentUser }) => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showRazorpay, setShowRazorpay] = useState(false);
 
   useEffect(() => {
     loadInvoices();
-  }, []);
+  }, [currentUser]);
 
   const loadInvoices = async () => {
-    const data = await ApiClient.getInvoices('cust_rahul_01');
+    const activeCustId = getActiveCustomerId(currentUser);
+    const data = await ApiClient.getInvoices(activeCustId);
     setInvoices(data);
   };
 

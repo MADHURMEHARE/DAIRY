@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Milk, PauseCircle, Calendar, CreditCard, CheckCircle2, Clock, ShieldCheck, ChevronRight } from 'lucide-react';
-import { Customer, Subscription, DeliveryRecord, Invoice } from '../../types';
+import { Customer, Subscription, DeliveryRecord, Invoice, User } from '../../types';
 import { ApiClient } from '../../api/client';
 import { PauseDeliveryModal } from '../../components/PauseDeliveryModal';
 import { RazorpayModal } from '../../components/RazorpayModal';
+import { getActiveCustomerId } from '../../utils/userUtils';
 
 interface CustomerHomeViewProps {
   onNavigate: (tab: string) => void;
+  currentUser?: User | null;
 }
 
-export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({ onNavigate }) => {
+export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({ onNavigate, currentUser }) => {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [todayDelivery, setTodayDelivery] = useState<DeliveryRecord | null>(null);
@@ -20,12 +22,12 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({ onNavigate }
 
   useEffect(() => {
     loadCustomerPortalData();
-  }, []);
+  }, [currentUser]);
 
   const loadCustomerPortalData = async () => {
     try {
-      // Load Rahul Patil's account data (cust_rahul_01)
-      const data = await ApiClient.getCustomerDetails('cust_rahul_01');
+      const activeCustomerId = getActiveCustomerId(currentUser);
+      const data = await ApiClient.getCustomerDetails(activeCustomerId);
       setCustomer(data.customer);
       setSubscription(data.subscription || null);
 

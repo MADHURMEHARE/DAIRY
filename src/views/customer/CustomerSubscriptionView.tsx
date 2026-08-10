@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Milk, PauseCircle, PlayCircle, Edit3, CheckCircle2 } from 'lucide-react';
-import { Subscription } from '../../types';
+import { Subscription, User } from '../../types';
 import { ApiClient } from '../../api/client';
 import { PauseDeliveryModal } from '../../components/PauseDeliveryModal';
+import { getActiveCustomerId } from '../../utils/userUtils';
 
-export const CustomerSubscriptionView: React.FC = () => {
+interface CustomerSubscriptionViewProps {
+  currentUser?: User | null;
+}
+
+export const CustomerSubscriptionView: React.FC<CustomerSubscriptionViewProps> = ({ currentUser }) => {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [quantity, setQuantity] = useState<number>(2);
   const [time, setTime] = useState<'MORNING' | 'EVENING'>('MORNING');
@@ -13,10 +18,11 @@ export const CustomerSubscriptionView: React.FC = () => {
 
   useEffect(() => {
     loadSubscription();
-  }, []);
+  }, [currentUser]);
 
   const loadSubscription = async () => {
-    const data = await ApiClient.getCustomerDetails('cust_rahul_01');
+    const activeCustId = getActiveCustomerId(currentUser);
+    const data = await ApiClient.getCustomerDetails(activeCustId);
     if (data.subscription) {
       setSubscription(data.subscription);
       setQuantity(data.subscription.quantity);
@@ -39,7 +45,19 @@ export const CustomerSubscriptionView: React.FC = () => {
     }
   };
 
-  if (!subscription) return null;
+  if (!subscription) {
+    return (
+      <div className="bg-white p-8 rounded-2xl border border-[#E5E7EB] text-center space-y-4 max-w-lg mx-auto">
+        <div className="w-16 h-16 rounded-full bg-[#F7F9F7] text-[#52796F] flex items-center justify-center text-3xl mx-auto">
+          🥛
+        </div>
+        <h3 className="font-bold text-[#081C15] text-base">No active milk subscription</h3>
+        <p className="text-xs text-[#52796F]">
+          Sign up or subscribe to daily fresh farm cow or buffalo milk delivered every morning to your doorstep.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-lg mx-auto">

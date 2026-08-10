@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ShoppingBag, Star, Plus, Minus, Check, Flame, ShieldCheck, Sparkles, Filter } from 'lucide-react';
-import { Product, CartItem, Customer } from '../../types';
+import { Product, CartItem, Customer, User } from '../../types';
 import { ApiClient } from '../../api/client';
 import { CartDrawerModal } from '../../components/CartDrawerModal';
+import { getActiveCustomerId } from '../../utils/userUtils';
 
 interface CustomerShopViewProps {
   cart: CartItem[];
@@ -10,6 +11,7 @@ interface CustomerShopViewProps {
   onUpdateQuantity: (productId: string, quantity: number) => void;
   onClearCart: () => void;
   onNavigateToOrders: () => void;
+  currentUser?: User | null;
 }
 
 export const CustomerShopView: React.FC<CustomerShopViewProps> = ({
@@ -18,6 +20,7 @@ export const CustomerShopView: React.FC<CustomerShopViewProps> = ({
   onUpdateQuantity,
   onClearCart,
   onNavigateToOrders,
+  currentUser,
 }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -28,14 +31,15 @@ export const CustomerShopView: React.FC<CustomerShopViewProps> = ({
 
   useEffect(() => {
     loadShopData();
-  }, []);
+  }, [currentUser]);
 
   const loadShopData = async () => {
     try {
       const prods = await ApiClient.getProducts();
       setProducts(prods);
 
-      const custData = await ApiClient.getCustomerDetails('cust_rahul_01');
+      const activeCustId = getActiveCustomerId(currentUser);
+      const custData = await ApiClient.getCustomerDetails(activeCustId);
       setCustomer(custData.customer);
     } catch (e) {
       console.error('Error loading shop products:', e);

@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, CheckCircle2, XCircle, Clock } from 'lucide-react';
-import { DeliveryRecord } from '../../types';
+import { DeliveryRecord, User } from '../../types';
 import { ApiClient } from '../../api/client';
+import { getActiveCustomerId } from '../../utils/userUtils';
 
-export const CustomerDeliveriesView: React.FC = () => {
+interface CustomerDeliveriesViewProps {
+  currentUser?: User | null;
+}
+
+export const CustomerDeliveriesView: React.FC<CustomerDeliveriesViewProps> = ({ currentUser }) => {
   const [deliveries, setDeliveries] = useState<DeliveryRecord[]>([]);
 
   useEffect(() => {
-    ApiClient.getDeliveries({ customerId: 'cust_rahul_01' }).then(setDeliveries);
-  }, []);
+    const activeCustId = getActiveCustomerId(currentUser);
+    ApiClient.getDeliveries({ customerId: activeCustId }).then(setDeliveries);
+  }, [currentUser]);
 
   return (
     <div className="space-y-6 max-w-lg mx-auto">
