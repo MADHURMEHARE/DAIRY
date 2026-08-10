@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
-import { dbStore } from '../data/mockDatabase';
+import jwt from 'jsonwebtoken';
+import { dbStore, JWT_SECRET } from '../data/mockDatabase';
 import { connectMongoDB } from '../db/mongodb';
 
 const app = express();
@@ -69,10 +70,68 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
+// JWT Authentication Middleware for all protected /api routes
+app.use('/api', (req, res, next) => {
+  // Allow CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
+  // Define public endpoints that bypass JWT verification
+  const cleanPath = req.path.toLowerCase().replace(/\/$/, '');
+  const isPublic =
+    cleanPath === '' ||
+    cleanPath === '/health' ||
+    cleanPath.startsWith('/health/') ||
+    cleanPath === '/auth/login' ||
+    cleanPath.startsWith('/auth/login/') ||
+    cleanPath === '/auth/register' ||
+    cleanPath.startsWith('/auth/register/') ||
+    cleanPath === '/auth/token' ||
+    cleanPath.startsWith('/auth/token/');
+
+  if (isPublic) {
+    return next();
+  }
+
+  // Validate Authorization: Bearer <token>
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Missing or invalid Authorization header' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded: any = jwt.verify(token, JWT_SECRET);
+    (req as any).user = decoded;
+    next();
+  } catch (err: any) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
+  }
+});
+
 // Auth / Me / Switch Role
 app.get('/api/auth/me', (req, res) => {
-  const roleHeader = (req.headers['x-user-role'] as string) || 'ADMIN';
-  const user = dbStore.users.find((u) => u.role === roleHeader) || dbStore.users[0];
+  const authHeader = req.headers['authorization'];
+  let user = null;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const decoded: any = jwt.verify(token, JWT_SECRET);
+      if (decoded && decoded.userId) {
+        user = dbStore.users.find((u) => u.id === decoded.userId) || null;
+      }
+    } catch (err) {
+      // Invalid or expired token
+    }
+  }
+
+  if (!user) {
+    const roleHeader = (req.headers['x-user-role'] as string) || 'ADMIN';
+    user = dbStore.users.find((u) => u.role === roleHeader) || dbStore.users[0];
+  }
+
   res.json({ user, dairy: dbStore.dairy });
 });
 
@@ -341,6 +400,36 @@ app.put('/api/ecommerce/orders/:id/status', (req, res) => {
 });
 
 // Authentication Routes
+app.get('/api/auth/token', (req, res) => {
+  const role = (req.query.role as string) || 'ADMIN';
+  const user = dbStore.users.find((u) => u.role === role) || dbStore.users[0];
+  const token = dbStore.authenticateUser(user.phone || user.email || 'admin@dairy.com', user.role).token;
+  res.json({
+    token,
+    user: {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      email: user.email,
+      phone: user.phone
+    }
+  });
+});
+
+app.post('/api/auth/token', (req, res) => {
+  try {
+    const { phoneOrEmail, role } = req.body;
+    const matchedUser = dbStore.users.find((u) => u.role === role || u.email === phoneOrEmail || u.phone === phoneOrEmail) || dbStore.users[0];
+    const authResult = dbStore.authenticateUser(matchedUser.phone || matchedUser.email || 'admin@dairy.com', matchedUser.role);
+    res.json({
+      token: authResult.token,
+      user: authResult.user
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Token generation failed' });
+  }
+});
+
 app.post('/api/auth/login', (req, res) => {
   try {
     const { phoneOrEmail, role, password } = req.body;
@@ -355,12 +444,12 @@ app.post('/api/auth/login', (req, res) => {
 
 app.post('/api/auth/register', (req, res) => {
   try {
-    const { name, phone, email, address, milkType, quantity } = req.body;
+    const { name, phone, email, password, address, milkType, quantity } = req.body;
     if (!name || !phone || !address) {
       return res.status(400).json({ error: 'Name, phone, and delivery address are required' });
     }
 
-    const registered = dbStore.registerCustomer({ name, phone, email, address, milkType, quantity });
+    const registered = dbStore.registerCustomer({ name, phone, email, password, address, milkType, quantity });
     res.status(201).json(registered);
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Registration failed' });

@@ -1,3 +1,4 @@
+import jwt from 'jsonwebtoken';
 import {
   DairyStore,
   Customer,
@@ -13,6 +14,25 @@ import {
   EcommerceOrder,
   ServiceTicket
 } from '../types';
+
+export const JWT_SECRET = process.env.JWT_SECRET || '9f8a3d2b7e1c4a0f8d6e3c2b1a9f4e7d0c8b5a2f6e3c1d9a4f7b0e8c5d2a6f1';
+
+export function generateJwtToken(user: User): string {
+  return jwt.sign(
+    {
+      userId: user.id,
+      role: user.role,
+      dairyId: user.dairyId,
+      customerId: user.customerId,
+      deliveryStaffId: user.deliveryStaffId,
+      name: user.name,
+      email: user.email,
+      phone: user.phone
+    },
+    JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+}
 
 export const INITIAL_DAIRY: DairyStore = {
   id: 'dairy_anandwan_01',
@@ -1311,11 +1331,34 @@ class DairyDataStore {
           password: 'Master@123'
         };
       } else if (role === 'ADMIN') {
-        matchedUser = this.users.find((u) => u.role === 'ADMIN')!;
+        matchedUser = this.users.find((u) => u.role === 'ADMIN') || {
+          id: 'user_admin_01',
+          dairyId: this.dairy.id,
+          name: 'Shri Anand Deshmukh',
+          email: 'owner@anandwandairy.com',
+          phone: cleanInput || '9850012345',
+          role: 'ADMIN',
+          password: 'dairy2026'
+        };
       } else if (role === 'DELIVERY_STAFF') {
-        matchedUser = this.users.find((u) => u.role === 'DELIVERY_STAFF')!;
+        matchedUser = this.users.find((u) => u.role === 'DELIVERY_STAFF') || {
+          id: 'user_staff_01',
+          dairyId: this.dairy.id,
+          name: 'Ramesh Patil',
+          email: 'ramesh@anandwandairy.com',
+          phone: cleanInput || '9890011223',
+          role: 'DELIVERY_STAFF'
+        };
       } else {
-        matchedUser = this.users.find((u) => u.role === 'CUSTOMER')!;
+        matchedUser = this.users.find((u) => u.role === 'CUSTOMER') || {
+          id: 'user_cust_01',
+          dairyId: this.dairy.id,
+          name: 'Aniket Deshmukh',
+          email: 'aniket@gmail.com',
+          phone: cleanInput || '9823011223',
+          role: 'CUSTOMER',
+          customerId: 'cust_rahul_01'
+        };
       }
     }
 
@@ -1326,19 +1369,21 @@ class DairyDataStore {
       }
     }
 
-    const token = `token_anandwan_${matchedUser.id}_${Date.now()}`;
+    const token = generateJwtToken(matchedUser);
     return { user: matchedUser, token };
   }
 
-  public registerCustomer(data: { name: string; phone: string; email?: string; address: string; milkType: string; quantity: number }): { user: User; customer: Customer } {
+  public registerCustomer(data: { name: string; phone: string; email?: string; password?: string; address: string; milkType: string; quantity: number }): { user: User; customer: Customer; token: string } {
     const custId = `cust_${Date.now()}`;
     const qty = Number(data.quantity || 1);
+    const customerEmail = data.email || `${data.name.toLowerCase().replace(/\s+/g, '')}@gmail.com`;
+
     const newCustomer: Customer = {
       id: custId,
       dairyId: this.dairy.id,
       name: data.name,
       phone: data.phone,
-      email: data.email || `${data.name.toLowerCase().replace(/\s+/g, '')}@gmail.com`,
+      email: customerEmail,
       address: data.address,
       city: 'Amravati',
       pincode: '444601',
@@ -1358,8 +1403,9 @@ class DairyDataStore {
       id: `user_${custId}`,
       dairyId: this.dairy.id,
       name: data.name,
-      email: newCustomer.email || '',
+      email: customerEmail,
       phone: data.phone,
+      password: data.password || 'dairy2026',
       role: 'CUSTOMER',
       customerId: custId
     };
@@ -1407,20 +1453,34 @@ class DairyDataStore {
       deliveryStaffName: 'Ramesh Kumar'
     });
 
-    // Welcome Notification
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // 1. Welcome Notification for Customer
     this.notifications.unshift({
       id: `notif_welcome_${Date.now()}`,
       dairyId: this.dairy.id,
       recipientRole: 'CUSTOMER',
       customerId: custId,
       title: 'Welcome to Anandwan Milk Dairy! 🥛',
-      message: `Hello ${data.name}, your ${qty}L ${prod.name} daily subscription is now active!`,
+      message: `Hello ${data.name}, your ${qty}L ${prod.name} daily subscription is active!`,
       type: 'SYSTEM',
       isRead: false,
-      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      createdAt: timeStr
     });
 
-    return { user: newUser, customer: newCustomer };
+    // 2. Alert Notification for Dairy Owner & Staff
+    this.notifications.unshift({
+      id: `notif_owner_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      dairyId: this.dairy.id,
+      recipientRole: 'ADMIN',
+      title: '🆕 New Customer Registered!',
+      message: `Customer ${data.name} (Phone: ${data.phone}, Email: ${customerEmail}) registered at ${data.address}. Daily order: ${qty}L ${prod.name}.`,
+      type: 'SYSTEM',
+      isRead: false,
+      createdAt: timeStr
+    });
+
+    return { user: newUser, customer: newCustomer, token: generateJwtToken(newUser) };
   }
 
   // Service Desk / Support Ticket Methods

@@ -17,6 +17,7 @@ import {
 export class ApiClient {
   private static userRole: string = 'ADMIN';
   private static baseUrl: string = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  private static jwtToken: string = typeof localStorage !== 'undefined' ? (localStorage.getItem('dairy_jwt_token') || '') : '';
 
   public static setRole(role: string) {
     this.userRole = role;
@@ -24,6 +25,24 @@ export class ApiClient {
 
   public static getRole(): string {
     return this.userRole;
+  }
+
+  public static setToken(token: string) {
+    this.jwtToken = token;
+    if (typeof localStorage !== 'undefined') {
+      if (token) {
+        localStorage.setItem('dairy_jwt_token', token);
+      } else {
+        localStorage.removeItem('dairy_jwt_token');
+      }
+    }
+  }
+
+  public static getToken(): string {
+    if (!this.jwtToken && typeof localStorage !== 'undefined') {
+      this.jwtToken = localStorage.getItem('dairy_jwt_token') || '';
+    }
+    return this.jwtToken;
   }
 
   public static setBaseUrl(url: string) {
@@ -36,22 +55,35 @@ export class ApiClient {
 
   private static getUrl(path: string): string {
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
-    if (!this.baseUrl) return cleanPath;
-    // If baseUrl matches current window origin, prefer relative path for maximum reliability
-    if (typeof window !== 'undefined' && this.baseUrl === window.location.origin) {
-      return cleanPath;
+    if (typeof window !== 'undefined') {
+      if (!this.baseUrl || this.baseUrl.includes('localhost') || this.baseUrl.includes('127.0.0.1') || this.baseUrl === window.location.origin) {
+        return cleanPath;
+      }
     }
+    if (!this.baseUrl) return cleanPath;
     return `${this.baseUrl}${cleanPath}`;
   }
 
   private static getHeaders() {
-    return {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'X-User-Role': this.userRole
     };
+    const token = this.getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
   }
 
-  private static async request<T = any>(path: string, options?: RequestInit): Promise<T> {
+  private static async request<T = any>(path: string, options?: RequestInit, retryCount = 0): Promise<T> {
+    const isPublic = ['/api/health', '/api/auth/login', '/api/auth/register', '/api/auth/token'].some((p) => path.startsWith(p));
+    if (!isPublic && !this.getToken()) {
+      try {
+        await this.generateToken(this.userRole);
+      } catch (_) {}
+    }
+
     try {
       const url = this.getUrl(path);
       const res = await fetch(url, {
@@ -61,6 +93,14 @@ export class ApiClient {
           ...(options?.headers || {})
         }
       });
+
+      if (res.status === 401 && !isPublic && retryCount === 0) {
+        this.setToken('');
+        try {
+          await this.generateToken(this.userRole);
+          return await this.request<T>(path, options, 1);
+        } catch (_) {}
+      }
 
       if (!res.ok) {
         let errMessage = `HTTP error ${res.status}`;
@@ -73,8 +113,7 @@ export class ApiClient {
 
       return await res.json();
     } catch (err: any) {
-      // If fetching external baseUrl failed, attempt fallback to relative URL on current origin
-      if (this.baseUrl && typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && retryCount === 0) {
         try {
           const cleanPath = path.startsWith('/') ? path : `/${path}`;
           const fallbackRes = await fetch(cleanPath, {
@@ -250,18 +289,40 @@ export class ApiClient {
   }
 
   // Auth API
+  public static async generateToken(role = 'ADMIN'): Promise<{ token: string; user: User }> {
+    const res = await this.request(`/api/auth/token?role=${encodeURIComponent(role)}`);
+    if (res && res.token) {
+      this.setToken(res.token);
+    }
+    return res;
+  }
+
   public static async login(phoneOrEmail: string, role?: string, otp?: string, password?: string): Promise<AuthSession> {
-    return this.request('/api/auth/login', {
+    const session: AuthSession = await this.request('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ phoneOrEmail, role, otp, password })
     });
+    if (session && session.token) {
+      this.setToken(session.token);
+    }
+    if (session && session.user && session.user.role) {
+      this.setRole(session.user.role);
+    }
+    return session;
   }
 
-  public static async registerCustomer(data: { name: string; phone: string; email?: string; address: string; milkType: string; quantity: number }): Promise<{ user: User; customer: Customer }> {
-    return this.request('/api/auth/register', {
+  public static async registerCustomer(data: { name: string; phone: string; email?: string; password?: string; address: string; milkType: string; quantity: number }): Promise<{ user: User; customer: Customer; token?: string }> {
+    const res = await this.request('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(data)
     });
+    if (res && res.token) {
+      this.setToken(res.token);
+    }
+    if (res && res.user && res.user.role) {
+      this.setRole(res.user.role);
+    }
+    return res;
   }
 
   // Service Tickets / Helpdesk API

@@ -57,18 +57,28 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRole, onRoleChange, curre
 
         {/* Right Actions: Notifications & User Account */}
         <div className="flex items-center gap-3">
-          {/* Active Role Badge */}
-          <div className="hidden md:flex items-center gap-1.5 bg-[#F7F9F7] px-3 py-1.5 rounded-xl border border-[#E5E7EB] text-xs font-bold text-[#1B4332]">
-            <Shield className="w-3.5 h-3.5 text-[#2D6A4F]" />
-            <span>
-              {currentRole === 'MASTER_ADMIN'
-                ? 'Master Admin'
-                : currentRole === 'ADMIN'
-                ? 'Dairy Owner'
-                : currentRole === 'DELIVERY_STAFF'
-                ? 'Delivery Staff'
-                : 'Customer Portal'}
-            </span>
+          {/* Active Role Badge & Switcher */}
+          <div className="hidden sm:flex items-center gap-1 bg-[#F7F9F7] p-1 rounded-xl border border-[#E5E7EB] text-xs font-bold">
+            <button
+              onClick={() => onRoleChange('CUSTOMER')}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                currentRole === 'CUSTOMER'
+                  ? 'bg-[#1B4332] text-white shadow-2xs'
+                  : 'text-[#52796F] hover:text-[#081C15]'
+              }`}
+            >
+              <span>👤 Customer</span>
+            </button>
+            <button
+              onClick={() => onRoleChange('ADMIN')}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                currentRole === 'ADMIN' || currentRole === 'MASTER_ADMIN' || currentRole === 'DELIVERY_STAFF'
+                  ? 'bg-[#1B4332] text-white shadow-2xs'
+                  : 'text-[#52796F] hover:text-[#081C15]'
+              }`}
+            >
+              <span>🚜 Owner & Staff</span>
+            </button>
           </div>
 
           {/* Notifications button */}
