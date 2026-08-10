@@ -35,11 +35,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
   if (!isOpen) return null;
 
-  const handleRoleSelect = (role: 'CUSTOMER' | 'OWNER') => {
+  const handleRoleSelect = (role: 'CUSTOMER' | 'ADMIN') => {
     setSelectedMainRole(role);
     setErrorMessage(null);
     setSuccessMessage(null);
-    if (role === 'OWNER') {
+    if (role === 'ADMIN') {
       setLoginMethod('PASSWORD');
     } else {
       setLoginMethod('OTP');
@@ -257,7 +257,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                   {/* Role 2: Owner & Staff */}
                   <button
                     type="button"
-                    onClick={() => handleRoleSelect('OWNER')}
+                    onClick={() => handleRoleSelect('ADMIN')}
                     className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 relative ${
                       selectedMainRole === 'ADMIN'
                         ? 'bg-[#F0FDF4] border-[#1B4332] ring-2 ring-[#1B4332]/20 shadow-xs'

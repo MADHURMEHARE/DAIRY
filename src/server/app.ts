@@ -143,41 +143,15 @@ app.get('/api/auth/me', async (req, res, next) => {
 
 app.post('/api/auth/login', async (req, res, next) => {
   try {
-    const {
-      phoneOrEmail,
-      role,
-      password,
-    } = req.body;
-
+    const { phoneOrEmail, role, password } = req.body;
     if (!phoneOrEmail) {
-      return res.status(400).json({
-        error: 'Mobile number or email is required',
-      });
+      return res.status(400).json({ error: 'Mobile number or email is required' });
     }
 
-    if (!role) {
-      return res.status(400).json({
-        error: 'Role is required',
-      });
-    }
-
-    if (!['CUSTOMER', 'OWNER', 'STAFF', 'MASTER_ADMIN'].includes(role)) {
-      return res.status(400).json({
-        error: 'Invalid role',
-      });
-    }
-
-    const authResult = await DbService.loginUser(
-      phoneOrEmail,
-      role,
-      password
-    );
-
-    return res.json(authResult);
+    const authResult = await DbService.loginUser(phoneOrEmail, role, password);
+    res.json(authResult);
   } catch (err: any) {
-    return res.status(401).json({
-      error: err.message || 'Login failed',
-    });
+    res.status(400).json({ error: err.message || 'Login failed' });
   }
 });
 
@@ -604,7 +578,6 @@ app.put('/api/deliveries/:id/status', async (req, res, next) => {
 // --- INVOICES & PAYMENTS ---
 app.get(
   '/api/invoices/:id',
-  authenticate,
   async (req, res, next) => {
     try {
       const authUser = (req as any).user;
@@ -627,6 +600,7 @@ app.get(
         });
       }
 
+      // CUSTOMER can only access their own invoice
       if (authUser.role === 'CUSTOMER') {
         const customerId =
           authUser.customerId || authUser.userId;
@@ -639,7 +613,12 @@ app.get(
         }
       }
 
+      // OWNER / STAFF / MASTER_ADMIN
+      // can access invoices according to your existing
+      // backend authorization rules.
+
       return res.json(invoice);
+
     } catch (error) {
       next(error);
     }
