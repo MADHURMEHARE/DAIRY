@@ -59,19 +59,25 @@ export class ApiClient {
   }
 
   public static getBaseUrl(): string {
+    
     return this.baseUrl;
   }
+  
+private static getUrl(path: string): string {
+  const cleanPath = path.startsWith('/')
+    ? path
+    : `/${path}`;
 
-  private static getUrl(path: string): string {
-    const cleanPath = path.startsWith('/') ? path : `/${path}`;
-    if (typeof window !== 'undefined') {
-      if (!this.baseUrl || this.baseUrl.includes('localhost') || this.baseUrl.includes('127.0.0.1') || this.baseUrl === window.location.origin) {
-        return cleanPath;
-      }
-    }
-    if (!this.baseUrl) return cleanPath;
-    return `${this.baseUrl}${cleanPath}`;
+  const baseUrl = (this.baseUrl || '')
+    .trim()
+    .replace(/\/+$/, '');
+
+  if (!baseUrl) {
+    return cleanPath;
   }
+
+  return `${baseUrl}${cleanPath}`;
+}
 
   private static getHeaders() {
     const headers: Record<string, string> = {
@@ -84,48 +90,58 @@ export class ApiClient {
     }
     return headers;
   }
+private static async request<T = any>(
+  path: string,
+  options?: RequestInit
+): Promise<T> {
+  const url = this.getUrl(path);
 
-  private static async request<T = any>(path: string, options?: RequestInit, retryCount = 0): Promise<T> {
-    try {
-      const url = this.getUrl(path);
-      const res = await fetch(url, {
-        ...options,
-        headers: {
-          ...this.getHeaders(),
-          ...(options?.headers || {})
+  console.log('[API REQUEST]', {
+    method: options?.method || 'GET',
+    url,
+    path,
+  });
+
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        ...this.getHeaders(),
+        ...(options?.headers || {}),
+      },
+    });
+
+    if (!res.ok) {
+      let errMessage = `HTTP error ${res.status}`;
+
+      try {
+        const errData = await res.json();
+
+        if (errData?.error) {
+          errMessage = errData.error;
         }
-      });
 
-      if (!res.ok) {
-        let errMessage = `HTTP error ${res.status}`;
-        try {
-          const errData = await res.json();
-          if (errData && errData.error) errMessage = errData.error;
-        } catch (_) {}
-        throw new Error(errMessage);
+        if (errData?.message) {
+          errMessage = errData.message;
+        }
+      } catch {
+        // Response wasn't JSON
       }
 
-      return await res.json();
-    } catch (err: any) {
-      if (typeof window !== 'undefined' && retryCount === 0) {
-        try {
-          const cleanPath = path.startsWith('/') ? path : `/${path}`;
-          const fallbackRes = await fetch(cleanPath, {
-            ...options,
-            headers: {
-              ...this.getHeaders(),
-              ...(options?.headers || {})
-            }
-          });
-          if (fallbackRes.ok) {
-            return await fallbackRes.json();
-          }
-        } catch (_) {}
-      }
-      console.error(`[API Client Error on ${path}]:`, err?.message || err);
-      throw err;
+      throw new Error(errMessage);
     }
+
+    return await res.json();
+  } catch (error: any) {
+    console.error('[API ERROR]', {
+      method: options?.method || 'GET',
+      url,
+      error: error?.message || error,
+    });
+
+    throw error;
   }
+}
 
   public static async getHealth(): Promise<{ status: string; app: string; database: string; time: string }> {
     return this.request('/api/health');
