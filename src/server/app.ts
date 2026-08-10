@@ -143,15 +143,41 @@ app.get('/api/auth/me', async (req, res, next) => {
 
 app.post('/api/auth/login', async (req, res, next) => {
   try {
-    const { phoneOrEmail, role, password } = req.body;
+    const {
+      phoneOrEmail,
+      role,
+      password,
+    } = req.body;
+
     if (!phoneOrEmail) {
-      return res.status(400).json({ error: 'Mobile number or email is required' });
+      return res.status(400).json({
+        error: 'Mobile number or email is required',
+      });
     }
 
-    const authResult = await DbService.loginUser(phoneOrEmail, role, password);
-    res.json(authResult);
+    if (!role) {
+      return res.status(400).json({
+        error: 'Role is required',
+      });
+    }
+
+    if (!['CUSTOMER', 'OWNER', 'STAFF', 'MASTER_ADMIN'].includes(role)) {
+      return res.status(400).json({
+        error: 'Invalid role',
+      });
+    }
+
+    const authResult = await DbService.loginUser(
+      phoneOrEmail,
+      role,
+      password
+    );
+
+    return res.json(authResult);
   } catch (err: any) {
-    res.status(400).json({ error: err.message || 'Login failed' });
+    return res.status(401).json({
+      error: err.message || 'Login failed',
+    });
   }
 });
 
@@ -576,17 +602,49 @@ app.put('/api/deliveries/:id/status', async (req, res, next) => {
 });
 
 // --- INVOICES & PAYMENTS ---
-app.get('/api/invoices', async (req, res, next) => {
-  try {
-    const authUser = (req as any).user;
-    const custId = authUser?.customerId || authUser?.userId;
+app.get(
+  '/api/invoices/:id',
+  authenticate,
+  async (req, res, next) => {
+    try {
+      const authUser = (req as any).user;
 
-    const list = await DbService.getInvoices(authUser?.dairyId, authUser?.role, custId);
-    res.json(list);
-  } catch (err) {
-    next(err);
+      if (!authUser) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required',
+        });
+      }
+
+      const invoice = await DbService.getInvoiceById(
+        req.params.id
+      );
+
+      if (!invoice) {
+        return res.status(404).json({
+          success: false,
+          message: 'Invoice not found',
+        });
+      }
+
+      if (authUser.role === 'CUSTOMER') {
+        const customerId =
+          authUser.customerId || authUser.userId;
+
+        if (invoice.customerId !== customerId) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied',
+          });
+        }
+      }
+
+      return res.json(invoice);
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
 app.get('/api/invoices/:id', async (req, res, next) => {
   try {

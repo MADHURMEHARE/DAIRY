@@ -55,7 +55,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRole, currentUser, onOpen
             <p className="text-xs text-[#52796F] hidden sm:block">Anandwan Dairy • Amravati, MH</p>
           </div>
         </div>
-
         {/* Right Actions: Notifications & User Account */}
         <div className="flex items-center gap-3">
           {/* Role Status Badge */}

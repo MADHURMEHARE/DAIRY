@@ -40,7 +40,33 @@ export const CustomerHomeView: React.FC<CustomerHomeViewProps> = ({ onNavigate, 
       console.error(e);
     }
   };
+  if (!currentUser) {
+  return (
+    <div className="min-h-[400px] flex items-center justify-center p-4">
+      <div className="bg-white p-8 rounded-2xl border border-[#E5E7EB] text-center space-y-4 max-w-sm w-full">
+        <div className="w-16 h-16 rounded-full bg-[#F7F9F7] flex items-center justify-center text-3xl mx-auto">
+          🔐
+        </div>
 
+        <h3 className="font-bold text-[#081C15] text-lg">
+          Login Required
+        </h3>
+
+        <p className="text-xs text-[#52796F]">
+          Please login to view your subscription, deliveries,
+          bills and payments.
+        </p>
+
+        <button
+          onClick={() => onNavigate('login')}
+          className="w-full py-3 bg-[#1B4332] hover:bg-[#143326] text-white font-bold rounded-xl text-sm"
+        >
+          Login
+        </button>
+      </div>
+    </div>
+  );
+}
   if (!customer || !subscription) return <div className="p-8 text-center text-slate-400 text-xs">Loading Customer Portal...</div>;
 
   return (
